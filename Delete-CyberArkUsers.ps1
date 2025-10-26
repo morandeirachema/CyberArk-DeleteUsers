@@ -27,6 +27,10 @@
 .PARAMETER MinDays
     Optional. Only delete users with days_since_last_login greater than or equal to this value.
 
+.PARAMETER AllowedOrigins
+    Optional. Comma-separated list of origins to process (e.g., "LDAP,Local"). Only users from these origins will be deleted.
+    If not specified, all origins in the CSV will be processed.
+
 .PARAMETER DryRun
     If specified, simulates deletion without making actual changes.
 
@@ -35,6 +39,12 @@
 
 .EXAMPLE
     .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -MinDays 90 -DryRun
+
+.EXAMPLE
+    .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP"
+
+.EXAMPLE
+    .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP,Local" -MinDays 90
 
 .EXAMPLE
     .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -CredentialPath "C:\secure\credentials"
@@ -63,6 +73,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [int]$MinDays,
+
+    [Parameter(Mandatory = $false)]
+    [string]$AllowedOrigins,
 
     [Parameter(Mandatory = $false)]
     [switch]$DryRun
@@ -346,6 +359,16 @@ try {
         Write-Log "DRY RUN MODE - No users will be deleted" -Level WARNING
     }
 
+    # Parse allowed origins if specified
+    $allowedOriginsList = @()
+    if ($PSBoundParameters.ContainsKey('AllowedOrigins') -and -not [string]::IsNullOrWhiteSpace($AllowedOrigins)) {
+        $allowedOriginsList = $AllowedOrigins -split ',' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        Write-Log "Filtering by origins: $($allowedOriginsList -join ', ')"
+    }
+    else {
+        Write-Log "Processing all origins from CSV"
+    }
+
     # Load users from CSV
     $users = Import-UsersFromCsv -CsvPath $CsvPath
 
@@ -366,6 +389,23 @@ try {
         $days = $user.days_since_last_login.Trim()
 
         Write-Log "Processing user: $username (Origin: $origin, Days: $days)"
+
+        # Apply origin filter if specified
+        if ($allowedOriginsList.Count -gt 0) {
+            $originMatch = $false
+            foreach ($allowedOrigin in $allowedOriginsList) {
+                if ($origin -eq $allowedOrigin) {
+                    $originMatch = $true
+                    break
+                }
+            }
+
+            if (-not $originMatch) {
+                Write-Log "Skipping $username : Origin '$origin' not in allowed list" -Level WARNING
+                $stats.Skipped++
+                continue
+            }
+        }
 
         # Apply minimum days filter if specified
         if ($PSBoundParameters.ContainsKey('MinDays')) {

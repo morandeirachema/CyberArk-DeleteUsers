@@ -131,12 +131,36 @@ Eliminar solo usuarios que no hayan iniciado sesión por al menos 90 días:
 .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -MinDays 90
 ```
 
+### Filtrar por Origen de Usuario
+
+Eliminar solo usuarios de orígenes específicos (LDAP, Local, SAML, etc.):
+
+**Eliminar solo usuarios LDAP:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP"
+```
+
+**Eliminar usuarios de múltiples orígenes:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP,Local"
+```
+
+**Combinar filtros de origen y días:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP" -MinDays 90
+```
+
 ### Modo de Prueba (Dry Run)
 
 Probar el script sin eliminar usuarios realmente (usando credenciales almacenadas):
 
 ```powershell
 .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -DryRun
+```
+
+**Probar con filtros:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP" -MinDays 90 -DryRun
 ```
 
 ### Ruta de Credenciales Personalizada
@@ -163,6 +187,7 @@ Get-Help .\Delete-CyberArkUsers.ps1 -Full
 - **ClientSecret** (opcional): Client Secret de OAuth2 (o usar variable de entorno CYBERARK_CLIENT_SECRET o credenciales almacenadas)
 - **CredentialPath** (opcional): Ruta al directorio que contiene credenciales cifradas (por defecto: .\credentials)
 - **MinDays** (opcional): Eliminar solo usuarios con days_since_last_login >= este valor
+- **AllowedOrigins** (opcional): Lista separada por comas de orígenes a procesar (ej. "LDAP,Local"). Solo se eliminarán usuarios de estos orígenes
 - **DryRun** (switch): Simular eliminación sin hacer cambios reales
 
 ## Automatización y Tareas Programadas

@@ -131,12 +131,36 @@ Only delete users who haven't logged in for at least 90 days:
 .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -MinDays 90
 ```
 
+### Filter by User Origin
+
+Only delete users from specific origins (LDAP, Local, SAML, etc.):
+
+**Delete only LDAP users:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP"
+```
+
+**Delete users from multiple origins:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP,Local"
+```
+
+**Combine origin and days filters:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP" -MinDays 90
+```
+
 ### Dry Run Mode
 
 Test the script without actually deleting users (using stored credentials):
 
 ```powershell
 .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -DryRun
+```
+
+**Test with filters:**
+```powershell
+.\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -AllowedOrigins "LDAP" -MinDays 90 -DryRun
 ```
 
 ### Custom Credential Path
@@ -163,6 +187,7 @@ Get-Help .\Delete-CyberArkUsers.ps1 -Full
 - **ClientSecret** (optional): OAuth2 client secret (or use CYBERARK_CLIENT_SECRET env var or stored credentials)
 - **CredentialPath** (optional): Path to directory containing encrypted credentials (default: .\credentials)
 - **MinDays** (optional): Only delete users with days_since_last_login >= this value
+- **AllowedOrigins** (optional): Comma-separated list of origins to process (e.g., "LDAP,Local"). Only users from these origins will be deleted
 - **DryRun** (switch): Simulate deletion without making actual changes
 
 ## Automation and Scheduled Tasks
