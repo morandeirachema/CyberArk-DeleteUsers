@@ -1,5 +1,7 @@
 # CyberArk Privilege Cloud User Deletion Script
 
+**English** | [Español](README.es.md)
+
 A PowerShell script to delete users from CyberArk Privilege Cloud based on a CSV file containing user information including origin, username, and days since last login.
 
 ## Features
