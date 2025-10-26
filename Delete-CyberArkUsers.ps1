@@ -11,12 +11,18 @@
 
 .PARAMETER TenantUrl
     CyberArk Privilege Cloud tenant URL (e.g., https://your-tenant.cyberark.cloud).
+    Optional if using stored credentials.
 
 .PARAMETER ClientId
     OAuth2 client ID for authentication. Can also be set via CYBERARK_CLIENT_ID environment variable.
+    Optional if using stored credentials.
 
 .PARAMETER ClientSecret
     OAuth2 client secret for authentication. Can also be set via CYBERARK_CLIENT_SECRET environment variable.
+    Optional if using stored credentials.
+
+.PARAMETER CredentialPath
+    Path to directory containing encrypted credentials. Default: .\credentials
 
 .PARAMETER MinDays
     Optional. Only delete users with days_since_last_login greater than or equal to this value.
@@ -28,7 +34,10 @@
     .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -TenantUrl "https://tenant.cyberark.cloud" -ClientId "abc123" -ClientSecret "secret"
 
 .EXAMPLE
-    .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -TenantUrl "https://tenant.cyberark.cloud" -MinDays 90 -DryRun
+    .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -MinDays 90 -DryRun
+
+.EXAMPLE
+    .\Delete-CyberArkUsers.ps1 -CsvPath "users.csv" -CredentialPath "C:\secure\credentials"
 
 .NOTES
     Author: CyberArk Admin
@@ -40,7 +49,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$CsvPath,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]$TenantUrl,
 
     [Parameter(Mandatory = $false)]
@@ -48,6 +57,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$ClientSecret,
+
+    [Parameter(Mandatory = $false)]
+    [string]$CredentialPath = ".\credentials",
 
     [Parameter(Mandatory = $false)]
     [int]$MinDays,
@@ -63,6 +75,60 @@ $ErrorActionPreference = "Stop"
 # Initialize logging
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $logFile = "cyberark_delete_$timestamp.log"
+
+function Import-SecureCredential {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CredentialPath
+    )
+
+    try {
+        $credFilePath = Join-Path $CredentialPath "cyberark.cred"
+
+        if (-not (Test-Path $credFilePath)) {
+            return $null
+        }
+
+        Write-Log "Loading encrypted credentials from: $credFilePath"
+
+        # Load credential file
+        $credData = Get-Content -Path $credFilePath -Raw | ConvertFrom-Json
+
+        # Decrypt client secret based on encryption type
+        if ($credData.EncryptionType -eq "AES") {
+            # AES encryption - need key file
+            $keyFilePath = Join-Path $CredentialPath "aes.key"
+
+            if (-not (Test-Path $keyFilePath)) {
+                throw "AES key file not found: $keyFilePath"
+            }
+
+            $aesKey = Get-Content -Path $keyFilePath -Encoding Byte
+            $secureSecret = ConvertTo-SecureString -String $credData.ClientSecret -Key $aesKey
+        }
+        else {
+            # DPAPI encryption
+            $secureSecret = ConvertTo-SecureString -String $credData.ClientSecret
+        }
+
+        # Convert SecureString to plain text
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSecret)
+        $plainSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+
+        Write-Log "Successfully loaded credentials (Encryption: $($credData.EncryptionType))"
+
+        return @{
+            TenantUrl    = $credData.TenantUrl
+            ClientId     = $credData.ClientId
+            ClientSecret = $plainSecret
+        }
+    }
+    catch {
+        Write-Log "Failed to load encrypted credentials: $($_.Exception.Message)" -Level ERROR
+        return $null
+    }
+}
 
 function Write-Log {
     param(
@@ -234,7 +300,28 @@ try {
     Write-Log "CyberArk User Deletion Script Started"
     Write-Log "========================================"
 
-    # Get credentials from parameters or environment variables
+    # Try to load credentials from stored file first
+    $storedCreds = Import-SecureCredential -CredentialPath $CredentialPath
+
+    if ($storedCreds) {
+        # Use stored credentials if not overridden by parameters
+        if (-not $TenantUrl) {
+            $TenantUrl = $storedCreds.TenantUrl
+            Write-Log "Using TenantUrl from stored credentials"
+        }
+
+        if (-not $ClientId) {
+            $ClientId = $storedCreds.ClientId
+            Write-Log "Using ClientId from stored credentials"
+        }
+
+        if (-not $ClientSecret) {
+            $ClientSecret = $storedCreds.ClientSecret
+            Write-Log "Using ClientSecret from stored credentials"
+        }
+    }
+
+    # Fallback to environment variables if still not set
     if (-not $ClientId) {
         $ClientId = $env:CYBERARK_CLIENT_ID
     }
@@ -243,8 +330,13 @@ try {
         $ClientSecret = $env:CYBERARK_CLIENT_SECRET
     }
 
+    # Validate that we have all required credentials
+    if (-not $TenantUrl) {
+        throw "TenantUrl is required. Provide via parameter, stored credentials, or run Setup-CyberArkCredentials.ps1"
+    }
+
     if (-not $ClientId -or -not $ClientSecret) {
-        throw "Client ID and Client Secret are required. Provide via parameters or environment variables."
+        throw "Client ID and Client Secret are required. Provide via parameters, environment variables, or run Setup-CyberArkCredentials.ps1"
     }
 
     # Remove trailing slash from tenant URL

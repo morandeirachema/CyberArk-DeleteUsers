@@ -4,6 +4,11 @@
 # Logs
 *.log
 
+# Encrypted credentials and keys
+credentials/
+*.cred
+*.key
+
 # IDE
 .vscode/
 .idea/
