@@ -1,0 +1,16 @@
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CSV files (except template)
+*.csv
+!users_template.csv
